@@ -1,4 +1,4 @@
-import { Page, Locator, expect } from '@playwright/test';
+import { Page, Locator } from '@playwright/test';
 
 export class VideoPlayerPage {
   readonly video: Locator;
@@ -17,7 +17,7 @@ export class VideoPlayerPage {
   readonly addMarkerButton: Locator;
   readonly approveToggle: Locator;
 
-  constructor(readonly page: Page) {
+  constructor(private readonly page: Page) {
     this.video = page.locator('video').first();
     // Seek/progress bar — the videoControls div contains the clickable track area
     this.progressBar = page.locator('.videoControls').first();
@@ -113,19 +113,31 @@ export class VideoPlayerPage {
   }
 
   async seekTo(seconds: number): Promise<void> {
-    // Set currentTime directly — more reliable than clicking the custom track div
     await this.page.evaluate((t) => {
       const v = document.querySelector('video') as HTMLVideoElement;
       if (!v) throw new Error('No video element');
       v.currentTime = t;
     }, seconds);
-    await this.page.waitForTimeout(300);
+    // Wait until currentTime reflects the seek (within 1s tolerance)
+    await this.page.waitForFunction(
+      (t) => {
+        const v = document.querySelector('video') as HTMLVideoElement | null;
+        return v ? Math.abs(v.currentTime - t) < 1 : false;
+      },
+      seconds,
+      { timeout: 5_000 },
+    );
   }
 
   async waitForTimeGreaterThan(seconds: number, timeout = 10_000): Promise<void> {
-    await expect
-      .poll(async () => await this.getCurrentTime(), { timeout })
-      .toBeGreaterThan(seconds);
+    await this.page.waitForFunction(
+      (t) => {
+        const v = document.querySelector('video') as HTMLVideoElement | null;
+        return v ? v.currentTime > t : false;
+      },
+      seconds,
+      { timeout },
+    );
   }
 
   async getVolume(): Promise<number> {
@@ -189,10 +201,7 @@ export class VideoPlayerPage {
 
   async openSettings(): Promise<void> {
     await this.settingsButton.click();
-    await this.page.waitForSelector('[role="menuitem"]#speed', {
-      state: 'visible',
-      timeout: 5_000,
-    });
+    await this.page.locator('[role="menuitem"]#speed').waitFor({ state: 'visible', timeout: 5_000 });
   }
 
   async setSpeed(speed: string): Promise<void> {
@@ -243,10 +252,7 @@ export class VideoPlayerPage {
 
   async openCrop(): Promise<void> {
     await this.cropButton.click();
-    await this.page.waitForSelector('.cropVideoControls', {
-      state: 'visible',
-      timeout: 8_000,
-    });
+    await this.page.locator('.cropVideoControls').waitFor({ state: 'visible', timeout: 8_000 });
   }
 
   async closeCrop(): Promise<void> {
@@ -289,10 +295,7 @@ export class VideoPlayerPage {
 
   async openAIPanel(): Promise<void> {
     await this.page.locator('#button-previewTranscripts').click();
-    await this.page.waitForSelector('.previewInfoboxTranscriptions, .TranscriptList', {
-      state: 'visible',
-      timeout: 8_000,
-    });
+    await this.page.locator('.previewInfoboxTranscriptions, .TranscriptList').first().waitFor({ state: 'visible', timeout: 8_000 });
   }
 
   async selectAIMode(
@@ -353,10 +356,7 @@ export class VideoPlayerPage {
 
   async openInfoPanel(): Promise<void> {
     await this.infoPanelButton.click();
-    await this.page.waitForSelector('[class*="infoPanel"], [class*="InfoPanel"], [class*="metadataPanel"]', {
-      state: 'visible',
-      timeout: 5_000,
-    });
+    await this.page.locator('[class*="infoPanel"], [class*="InfoPanel"], [class*="metadataPanel"]').first().waitFor({ state: 'visible', timeout: 5_000 });
   }
 
   async getTranscriptPreview(): Promise<string> {
@@ -430,13 +430,22 @@ export class VideoPlayerPage {
     const candidates = [5, 15, 30, 60, 90, 120];
     for (const t of candidates) {
       await this.seekTo(t);
-      await this.page.waitForTimeout(600);
-      const cueText = await this.getActiveCueText();
-      if (cueText && cueText.trim().length > 0) return true;
-      const subtitleEl = await this.page
-        .locator('.subtitlesContainer, .videoSubtitle, [class*="subtitle"], [class*="Subtitle"]')
-        .filter({ hasText: /\w/ }).first().textContent().catch(() => null);
-      if (subtitleEl && subtitleEl.trim().length > 0) return true;
+      // Wait for either a native VTT cue or a DOM-rendered subtitle element to appear
+      const found = await this.page.waitForFunction(
+        () => {
+          const v = document.querySelector('video');
+          if (v && v.textTracks.length) {
+            const track = v.textTracks[0];
+            if (track.activeCues && track.activeCues.length) return true;
+          }
+          const sub = document.querySelector(
+            '.subtitlesContainer, .videoSubtitle, [class*="subtitle"], [class*="Subtitle"]',
+          );
+          return sub ? (sub.textContent ?? '').trim().length > 0 : false;
+        },
+        { timeout: 2_000 },
+      ).then(() => true).catch(() => false);
+      if (found) return true;
     }
     return false;
   }
@@ -488,31 +497,26 @@ export class VideoPlayerPage {
     if (await this.playOverlay.isVisible({ timeout: 2_000 }).catch(() => false)) {
       await this.playOverlay.click();
       // Wait until the video is actually playing before pausing via the UI button
-      await expect
-        .poll(
-          () => this.page.evaluate(() => {
-            const v = document.querySelector('video') as HTMLVideoElement | null;
-            return v ? !v.paused && v.readyState >= 1 : false;
-          }),
-          { timeout: 10_000 },
-        )
-        .toBe(true);
+      await this.page.waitForFunction(
+        () => {
+          const v = document.querySelector('video') as HTMLVideoElement | null;
+          return v ? !v.paused && v.readyState >= 1 : false;
+        },
+        { timeout: 10_000 },
+      );
       // Now pause via the player's own toggle so internal state is consistent
       await this.pauseButton.click();
-      await this.page.waitForTimeout(300);
+      await this.waitForPauseConfirmed();
     }
 
     // Wait for HAVE_METADATA (readyState >= 1)
-    await expect
-      .poll(
-        () =>
-          this.page.evaluate(() => {
-            const v = document.querySelector('video');
-            return v ? v.readyState : 0;
-          }),
-        { timeout: 15_000 },
-      )
-      .toBeGreaterThanOrEqual(1);
+    await this.page.waitForFunction(
+      () => {
+        const v = document.querySelector('video');
+        return v ? v.readyState >= 1 : false;
+      },
+      { timeout: 15_000 },
+    );
 
     await this.dismissChatPopup();
   }
