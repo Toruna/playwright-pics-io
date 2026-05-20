@@ -44,25 +44,9 @@ test.describe('Video Player — Closed Captions', () => {
       await videoPlayerPage.toggleCC();
     }
 
-    // Play the video briefly so the player loads cues into the active textTrack
     await videoPlayerPage.play();
     await videoPlayerPage.waitForTimeGreaterThan(1, 8_000);
-
-    // Pics.io may render subtitles via its own UI rather than the native textTracks
-    // activeCues. Accept either: a native VTTCue OR a visible subtitle element in DOM.
-    const candidates = [5, 15, 30, 60, 90, 120];
-    let found = false;
-    for (const t of candidates) {
-      await videoPlayerPage.seekTo(t);
-      await videoPlayerPage.page.waitForTimeout(600);
-      const cueText = await videoPlayerPage.getActiveCueText();
-      if (cueText && cueText.trim().length > 0) { found = true; break; }
-      const subtitleEl = await videoPlayerPage.page
-        .locator('.subtitlesContainer, .videoSubtitle, [class*="subtitle"], [class*="Subtitle"]')
-        .filter({ hasText: /\w/ }).first().textContent().catch(() => null);
-      if (subtitleEl && subtitleEl.trim().length > 0) { found = true; break; }
-    }
-    expect(found).toBe(true);
+    expect(await videoPlayerPage.waitForSubtitleCue()).toBe(true);
   });
 
   test('no active cues when CC is off', async ({ videoPlayerPage }) => {

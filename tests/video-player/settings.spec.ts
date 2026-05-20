@@ -9,39 +9,33 @@ test.describe('Video Player — Settings', () => {
     await videoPlayerPage.waitForVideoLoaded();
   });
 
-  test('settings menu opens on gear icon click', async ({ videoPlayerPage, page }) => {
+  test('settings menu opens on gear icon click', async ({ videoPlayerPage }) => {
     await videoPlayerPage.openSettings();
-    await expect(page.locator('[role="menuitem"]#speed')).toBeVisible();
+    expect(await videoPlayerPage.isSettingsMenuOpen()).toBe(true);
   });
 
   test('speed options present: 0.25, 0.5, 0.75, Normal, 1.25, 1.5, 1.75, 2', async ({
     videoPlayerPage,
-    page,
   }) => {
     await videoPlayerPage.openSettings();
-    await page.locator('[role="menuitem"]#speed').click();
-
-    const expectedIds = ['0.25', '0.5', '0.75', '1', '1.25', '1.5', '1.75', '2'];
-    for (const id of expectedIds) {
-      await expect(page.locator(`[role="menuitem"][id="${id}"]`)).toBeVisible();
-    }
+    await videoPlayerPage.openSpeedSubmenu();
+    const ids = ['0.25', '0.5', '0.75', '1', '1.25', '1.5', '1.75', '2'];
+    expect(await videoPlayerPage.areSpeedOptionsVisible(ids)).toBe(true);
   });
 
   test('selecting speed 2 sets video.playbackRate to 2', async ({ videoPlayerPage }) => {
     await videoPlayerPage.setSpeed('2');
-    const rate = await videoPlayerPage.getPlaybackRate();
-    expect(rate).toBe(2);
+    expect(await videoPlayerPage.getPlaybackRate()).toBe(2);
   });
 
   test('selecting speed 0.5 sets video.playbackRate to 0.5', async ({ videoPlayerPage }) => {
     await videoPlayerPage.setSpeed('0.5');
-    const rate = await videoPlayerPage.getPlaybackRate();
-    expect(rate).toBe(0.5);
+    expect(await videoPlayerPage.getPlaybackRate()).toBe(0.5);
   });
 
-  test('quality label shows "1080p" in settings menu', async ({ videoPlayerPage, page }) => {
+  test('quality label shows "1080p" in settings menu', async ({ videoPlayerPage }) => {
     await videoPlayerPage.openSettings();
-    const qualityItem = page.locator('[role="menuitem"]#quality');
-    await expect(qualityItem).toContainText('1080p');
+    const text = await videoPlayerPage.getQualityMenuItemText();
+    expect(text).toContain('1080p');
   });
 });

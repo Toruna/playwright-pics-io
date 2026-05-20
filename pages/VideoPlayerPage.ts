@@ -339,6 +339,14 @@ export class VideoPlayerPage {
     await this.approveToggle.click();
   }
 
+  async isMarkerPanelVisible(): Promise<boolean> {
+    return this.page.locator('.toolMarkers, .wrapperSettedMarkers').first().isVisible();
+  }
+
+  async isIntroMarkerVisible(): Promise<boolean> {
+    return this.page.getByText(/intro/i).first().isVisible();
+  }
+
   // ---------------------------------------------------------------------------
   // Info Panel
   // ---------------------------------------------------------------------------
@@ -374,6 +382,63 @@ export class VideoPlayerPage {
 
   async isPlayerVisible(): Promise<boolean> {
     return this.video.isVisible();
+  }
+
+  async isSettingsMenuOpen(): Promise<boolean> {
+    return this.page.locator('[role="menuitem"]#speed').isVisible();
+  }
+
+  async areSpeedOptionsVisible(ids: string[]): Promise<boolean> {
+    for (const id of ids) {
+      const visible = await this.page.locator(`[role="menuitem"][id="${id}"]`).isVisible();
+      if (!visible) return false;
+    }
+    return true;
+  }
+
+  async openSpeedSubmenu(): Promise<void> {
+    await this.page.locator('[role="menuitem"]#speed').click();
+  }
+
+  async getQualityMenuItemText(): Promise<string> {
+    return (await this.page.locator('[role="menuitem"]#quality').textContent()) ?? '';
+  }
+
+  async isAIPanelVisible(): Promise<boolean> {
+    return this.page.locator('.previewInfoboxTranscriptions, .TranscriptList').first().isVisible();
+  }
+
+  async getAIPanelSearchBarText(): Promise<string> {
+    return (await this.page.locator('.TranscriptList__search-bar').textContent()) ?? '';
+  }
+
+  async getCrossOrigin(): Promise<string | null> {
+    return this.page.evaluate(() => {
+      const v = document.querySelector('video');
+      return v ? v.crossOrigin : null;
+    });
+  }
+
+  async waitForPauseConfirmed(): Promise<void> {
+    await this.page.waitForFunction(() => {
+      const v = document.querySelector('video') as HTMLVideoElement | null;
+      return v ? v.paused : false;
+    }, { timeout: 3_000 });
+  }
+
+  async waitForSubtitleCue(): Promise<boolean> {
+    const candidates = [5, 15, 30, 60, 90, 120];
+    for (const t of candidates) {
+      await this.seekTo(t);
+      await this.page.waitForTimeout(600);
+      const cueText = await this.getActiveCueText();
+      if (cueText && cueText.trim().length > 0) return true;
+      const subtitleEl = await this.page
+        .locator('.subtitlesContainer, .videoSubtitle, [class*="subtitle"], [class*="Subtitle"]')
+        .filter({ hasText: /\w/ }).first().textContent().catch(() => null);
+      if (subtitleEl && subtitleEl.trim().length > 0) return true;
+    }
+    return false;
   }
 
   private async dismissChatPopup(): Promise<void> {

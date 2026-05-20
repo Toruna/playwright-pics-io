@@ -10,13 +10,13 @@ test.describe('Video Player — AI Analysis Panel', () => {
     await videoPlayerPage.openAIPanel();
   });
 
-  test('AI panel opens on AI β button click', async ({ page }) => {
-    await expect(page.locator('.previewInfoboxTranscriptions, .TranscriptList').first()).toBeVisible();
+  test('AI panel opens on AI β button click', async ({ videoPlayerPage }) => {
+    expect(await videoPlayerPage.isAIPanelVisible()).toBe(true);
   });
 
-  test('AI panel title shows "AI Summary"', async ({ page }) => {
-    const searchBar = page.locator('.TranscriptList__search-bar');
-    await expect(searchBar).toContainText('AI Summary');
+  test('AI panel title shows "AI Summary"', async ({ videoPlayerPage }) => {
+    const text = await videoPlayerPage.getAIPanelSearchBarText();
+    expect(text).toContain('AI Summary');
   });
 
   test('"+ Analyze" button is visible', async ({ videoPlayerPage }) => {
@@ -25,7 +25,6 @@ test.describe('Video Player — AI Analysis Panel', () => {
 
   test('AI panel shows placeholder or content', async ({ videoPlayerPage }) => {
     const content = await videoPlayerPage.getAIPanelContent();
-    // Either the analyze CTA or actual AI content is present
     expect(content.trim().length).toBeGreaterThan(0);
     expect(content).toMatch(/AI Summary|analyze|Let AI|Transcript|Chapter/i);
   });
@@ -34,7 +33,6 @@ test.describe('Video Player — AI Analysis Panel', () => {
     videoPlayerPage,
   }) => {
     const content = await videoPlayerPage.getAIPanelContent();
-    // The panel contains actionable content — either results or the analyze CTA
     expect(content).toMatch(/analyze|summary|transcript|chapter|identify/i);
   });
 

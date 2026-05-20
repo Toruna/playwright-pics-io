@@ -26,11 +26,8 @@ test.describe('Video Player — Security', () => {
     expect(expiry).toBeGreaterThan(0);
   });
 
-  test('video element has crossOrigin set to "anonymous"', async ({ page }) => {
-    const crossOrigin = await page.evaluate(() => {
-      const v = document.querySelector('video');
-      return v ? v.crossOrigin : null;
-    });
+  test('video element has crossOrigin set to "anonymous"', async ({ videoPlayerPage }) => {
+    const crossOrigin = await videoPlayerPage.getCrossOrigin();
     expect(crossOrigin).toBe('anonymous');
   });
 });

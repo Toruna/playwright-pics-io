@@ -22,7 +22,7 @@ test.describe('Video Player — Playback', () => {
     expect(await videoPlayerPage.isPlaying()).toBe(true);
 
     await videoPlayerPage.pause();
-    await videoPlayerPage.page.waitForTimeout(300);
+    await videoPlayerPage.waitForPauseConfirmed();
     expect(await videoPlayerPage.isPlaying()).toBe(false);
   });
 
